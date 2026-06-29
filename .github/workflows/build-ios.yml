@@ -1,0 +1,79 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Kotlin framework for iOS
+        run: ./gradlew :composeApp:linkReleaseFrameworkIosArm64
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          cd iosApp
+          xcodegen generate
+          # Patch project to skip code signing for ad-hoc export
+          sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual; CODE_SIGN_IDENTITY = ""; CODE_SIGNING_REQUIRED = NO; CODE_SIGNING_ALLOWED = NO;/g' iosApp.xcodeproj/project.pbxproj
+
+      - name: Build iOS archive
+        run: |
+          cd iosApp
+          xcodebuild -project iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Release \
+            -archivePath build/iosApp.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+      - name: Create ExportOptions.plist
+        run: |
+          cat > iosApp/ExportOptions.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>teamID</key>
+              <string></string>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Export IPA
+        run: |
+          cd iosApp
+          xcodebuild -exportArchive \
+            -archivePath build/iosApp.xcarchive \
+            -exportPath build \
+            -exportOptionsPlist ExportOptions.plist \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeightTracker-iOS
+          path: iosApp/build/*.ipa
