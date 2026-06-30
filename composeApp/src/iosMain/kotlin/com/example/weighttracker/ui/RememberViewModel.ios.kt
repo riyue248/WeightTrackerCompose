@@ -7,19 +7,19 @@ import com.example.weighttracker.data.WeightRepository
 import com.example.weighttracker.viewmodel.WeightRecordViewModel
 import com.russhwolf.settings.Settings
 import platform.Foundation.NSDocumentDirectory
-import platform.Foundation.NSFileManager
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSUserDomainMask
 
 @Composable
 actual fun rememberViewModel(): WeightRecordViewModel {
     val scope = rememberCoroutineScope()
     return remember {
-        val dataDir = NSFileManager.defaultManager
-            .URLsForDirectory(NSDocumentDirectory, NSUserDomainMask)
-            .first()!!.path!!
+        val dataDir = NSSearchPathForDirectoriesInDomains(
+            NSDocumentDirectory, NSUserDomainMask, true
+        ).first() as String
         WeightRecordViewModel(
             repository = WeightRepository(dataDir),
-            settings = Settings(), // Uses NSUserDefaults
+            settings = Settings(),
             scope = scope
         )
     }
